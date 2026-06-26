@@ -9,7 +9,7 @@ import {
   UserCheck,
   Radio,
   Activity,
-  Bell,
+  BellRing,
   FileBarChart,
   Settings,
   LogOut,
@@ -21,6 +21,9 @@ import {
 const navItems = [
   { label: 'Dashboard', path: '/', icon: LayoutDashboard, roles: ['admin', 'preceptor'] },
   { label: 'Usuarios', path: '/usuarios', icon: Users, roles: ['admin'] },
+  { label: 'Eventos QR', path: '/eventos-qr', icon: Radio, roles: ['admin', 'preceptor'] },
+  { label: 'Antena RFID', path: '/antena-rfid', icon: Activity, roles: ['admin', 'preceptor'] },
+  { label: 'Alertas', path: '/alertas', icon: BellRing, roles: ['admin', 'preceptor'] },
 ]
 
 export default function Layout() {

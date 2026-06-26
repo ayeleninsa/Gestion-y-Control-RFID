@@ -4,6 +4,9 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import Alertas from './pages/Alertas'
+import AntenaRFID from './pages/AntenaRFID'
+import EventosQR from './pages/EventosQR'
 import Users from './pages/Users'
 import UserForm from './pages/UserForm'
 
@@ -21,6 +24,9 @@ export default function App() {
             }
           >
             <Route index element={<Dashboard />} />
+            <Route path="eventos-qr" element={<EventosQR />} />
+            <Route path="antena-rfid" element={<AntenaRFID />} />
+            <Route path="alertas" element={<Alertas />} />
             <Route
               path="usuarios"
               element={

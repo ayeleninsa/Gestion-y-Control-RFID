@@ -142,7 +142,41 @@
 
 ---
 
-## Fase 12: Despliegue
+## Fase 12: Simulacion Temporal (datos en memoria)
+
+- [x] **12.1** Crear `backend/app/services/simulador.py` con datos generados en memoria al iniciar servidor
+  - [x] 12.1.1 Datos de alumnos (nombre, email, dni, carrera, cohorte)
+  - [x] 12.1.2 Datos de computadoras con QR fisico (id_unico, modelo, tag_rfid, alumno asignado)
+  - [x] 12.1.3 QR fisico pegado en cada computadora (id_unico, alumno, cohorte, modelo, carrera, tag_rfid, hash)
+  - [x] 12.1.4 QR dinamico diario por carrera/año (hash unico, correo, dni, carrera, año, fecha)
+  - [x] 12.1.5 Actividad de camaras IP (prestamos, devoluciones, lecturas antena, escaneos QR, movimientos)
+  - [x] 12.1.6 Alertas automaticas (alumno con mas de una computadora, detecciones sin registro, etc.)
+  - [x] 12.1.7 Lecturas de antena RFID (tag, computadora, lector, timestamp, ubicacion)
+  - [x] 12.1.8 Generacion periodica de nuevos eventos cada 25-45 segundos (background thread)
+  - [x] 12.1.9 Stats y grafico de prestamos para dashboard
+- [x] **12.2** Crear `backend/app/api/simulacion.py` con endpoints REST para servir datos simulados
+  - [x] 12.2.1 `GET /api/simulacion/stats`
+  - [x] 12.2.2 `GET /api/simulacion/actividad`
+  - [x] 12.2.3 `GET /api/simulacion/alertas`
+  - [x] 12.2.4 `GET /api/simulacion/eventos-qr`
+  - [x] 12.2.5 `GET /api/simulacion/lecturas-antenna`
+  - [x] 12.2.6 `GET /api/simulacion/qr-fisico`
+  - [x] 12.2.7 `GET /api/simulacion/qr-dinamico`
+  - [x] 12.2.8 `GET /api/simulacion/prestamos`
+  - [x] 12.2.9 `GET /api/simulacion/camaras`
+  - [x] 12.2.10 `GET /api/simulacion/grafico-prestamos`
+- [x] **12.3** Registrar simulador en `main.py` (lifespan + router)
+- [x] **12.4** Dashboard.jsx consume datos simulados (stats, actividad, camaras, prestamos, grafico)
+- [x] **12.5** EventosQR.jsx consume datos simulados (escaneos QR fisicos y dinamicos)
+- [x] **12.6** Alertas.jsx consume datos simulados (alertas con tipo, mensaje, timestamp, leida/no leida)
+- [x] **12.7** Crear pagina `AntenaRFID.jsx` con lecturas de antenas en tiempo real
+  - [x] 12.7.1 Cards por antena con contador de lecturas
+  - [x] 12.7.2 Tabla historial con tag RFID, computadora, modelo, lector, ubicacion, timestamp
+- [x] **12.8** Agregar "Antena RFID" al menu lateral y ruta en App.jsx
+
+---
+
+## Fase 13: Despliegue
 
 - [ ] **12.1** Configurar variables de entorno para producción
 - [ ] **12.2** Crear scripts de deploy / Dockerfile

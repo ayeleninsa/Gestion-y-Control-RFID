@@ -6,7 +6,16 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from alembic import context
 from app.core.config import settings
 from app.core.database import Base
-from app.models import Computadoras, DetalleMant, LecturaRFID, Persona, User  # noqa: F401
+from app.models import (  # noqa: F401
+    Computadoras,
+    DetalleMant,
+    LecturaRFID,
+    Persona,
+    RfidEvento,
+    RfidLector,
+    RfidTag,
+    User,
+)
 
 config = context.config
 
