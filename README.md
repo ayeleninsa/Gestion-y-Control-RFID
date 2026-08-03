@@ -146,6 +146,63 @@ docker compose down -v
 
 ---
 
+## Respaldar e Importar la Base de Datos (`RFID.sql`)
+
+### 1. Guardar los datos en `RFID.sql` (Exportar)
+
+Si realizaste cambios en la base de datos y quieres guardar la estructura y los datos actualizados en el archivo `RFID.sql`:
+
+#### Con Docker (Recomendado, no requiere pg_dump instalado localmente)
+```bash
+docker run --rm -e PGPASSWORD=123456 postgres:16 pg_dump -h host.docker.internal -p 5432 -U postgres RFID > RFID.sql
+```
+
+#### Con pg_dump en la terminal
+```bash
+# Windows (PowerShell)
+$env:PGPASSWORD="123456"; pg_dump -U postgres -h localhost -p 5432 -d RFID -f RFID.sql
+
+# Linux / macOS (Bash)
+PGPASSWORD="123456" pg_dump -U postgres -h localhost -p 5432 -d RFID -f RFID.sql
+```
+
+#### Con pgAdmin 4
+1. Haz clic derecho sobre la base de datos `RFID` -> **Backup...**.
+2. Asigna la ruta del archivo `RFID.sql` y selecciona formato **Plain**.
+3. Haz clic en **Backup**.
+
+---
+
+### 2. Volver a insertar / restaurar los datos (Importar)
+
+Para cargar los datos respaldados en `RFID.sql` en una nueva PC o base de datos vacía:
+
+#### Con psql en la terminal
+1. Asegúrate de tener la base de datos creada (`CREATE DATABASE RFID;`).
+2. Ejecuta el comando de restauración:
+   ```bash
+   # Windows (PowerShell)
+   $env:PGPASSWORD="123456"; psql -U postgres -h localhost -p 5432 -d RFID -f RFID.sql
+
+   # Linux / macOS (Bash)
+   PGPASSWORD="123456" psql -U postgres -h localhost -p 5432 -d RFID -f RFID.sql
+   ```
+
+#### Con Docker Compose
+Si levantas la base de datos con Docker (`docker compose up -d`), la imagen cargará el archivo `RFID.sql` de la raíz automáticamente en la primera ejecución.
+
+Para restaurar manualmente sobre un contenedor ya iniciado:
+```bash
+docker exec -i <nombre_contenedor_postgres> psql -U postgres -d RFID < RFID.sql
+```
+
+#### Con pgAdmin 4
+1. Crea una base de datos `RFID`.
+2. Haz clic derecho sobre `RFID` -> **Restore...**.
+3. Selecciona el archivo `RFID.sql` y haz clic en **Restore**.
+
+---
+
 ## Comandos útiles
 
 ```bash
