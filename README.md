@@ -119,6 +119,33 @@ El frontend estará disponible en `http://localhost:5173`.
 
 ---
 
+### 7. (Alternativa) Base de datos con Docker
+
+Levantar una instancia PostgreSQL aislada sin afectar servicios existentes:
+
+```bash
+docker compose up -d
+```
+
+El contenedor expone PostgreSQL en el puerto `5433` del host. El esquema y datos de `RFID.sql` se cargan automáticamente al primer inicio.
+
+Connection string para `backend\.env`:
+```
+DATABASE_URL=postgresql+asyncpg://postgres:123456@localhost:5433/RFID
+```
+
+Detener:
+```bash
+docker compose down
+```
+
+Eliminar datos (volumen):
+```bash
+docker compose down -v
+```
+
+---
+
 ## Comandos útiles
 
 ```bash

@@ -1,3 +1,5 @@
+import random
+import time
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,9 +8,13 @@ from app.api.dependencies import get_current_user
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.user import User
-from app.schemas.user import Token, UserCreate, UserLogin, UserRead
+from app.schemas.user import Token, UserCreate, UserLogin, UserRead, LoginResponse, ChangePasswordRequest, Verify2FARequest
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
+
+# In-memory store for 2FA codes (user_id -> {"code": "123456", "expires_at": timestamp})
+_2fa_codes = {}
+
 
 
 @router.post("/register", response_model=UserRead, status_code=201)
@@ -35,7 +41,7 @@ async def register(data: UserCreate, db: AsyncSession = Depends(get_db)):
     return user
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=LoginResponse)
 async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
@@ -52,8 +58,72 @@ async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
             detail="Usuario inactivo",
         )
 
+    temp_token = create_access_token({"sub": str(user.id), "rol": user.rol, "temp": True})
+
+    if getattr(user, 'must_change_password', False):
+        return LoginResponse(must_change_password=True, temp_token=temp_token)
+
+    if user.rol == "alumno":
+        # Generate 2FA code
+        code = str(random.randint(100000, 999999))
+        _2fa_codes[user.id] = {"code": code, "expires_at": time.time() + 300} # 5 minutes
+        print(f"==================================================")
+        print(f"2FA Code for {user.email}: {code}")
+        print(f"==================================================")
+        return LoginResponse(requires_2fa=True, temp_token=temp_token)
+
     token = create_access_token({"sub": str(user.id), "rol": user.rol})
-    return Token(access_token=token)
+    return LoginResponse(access_token=token)
+
+@router.post("/change-password")
+async def change_password(data: ChangePasswordRequest, db: AsyncSession = Depends(get_db)):
+    from app.core.security import decode_access_token
+    payload = decode_access_token(data.temp_token)
+    if not payload or not payload.get("temp"):
+        raise HTTPException(status_code=401, detail="Token invalido")
+    
+    user_id = int(payload.get("sub"))
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        
+    user.password_hash = hash_password(data.new_password)
+    user.must_change_password = False
+    await db.commit()
+    
+    if user.rol == "alumno":
+        # After changing password, require 2FA
+        code = str(random.randint(100000, 999999))
+        _2fa_codes[user.id] = {"code": code, "expires_at": time.time() + 300}
+        print(f"==================================================")
+        print(f"2FA Code for {user.email}: {code}")
+        print(f"==================================================")
+        return LoginResponse(requires_2fa=True, temp_token=data.temp_token)
+        
+    token = create_access_token({"sub": str(user.id), "rol": user.rol})
+    return LoginResponse(access_token=token)
+
+@router.post("/verify-2fa")
+async def verify_2fa(data: Verify2FARequest, db: AsyncSession = Depends(get_db)):
+    from app.core.security import decode_access_token
+    payload = decode_access_token(data.temp_token)
+    if not payload or not payload.get("temp"):
+        raise HTTPException(status_code=401, detail="Token invalido")
+        
+    user_id = int(payload.get("sub"))
+    record = _2fa_codes.get(user_id)
+    
+    if not record or time.time() > record["expires_at"] or record["code"] != data.code:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Codigo 2FA invalido o expirado")
+        
+    # Clear the code
+    del _2fa_codes[user_id]
+    
+    token = create_access_token({"sub": str(user_id), "rol": payload.get("rol")})
+    return LoginResponse(access_token=token)
+
 
 
 @router.get("/me", response_model=UserRead)

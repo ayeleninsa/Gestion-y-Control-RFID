@@ -41,3 +41,18 @@ class UserLogin(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+class LoginResponse(BaseModel):
+    access_token: str | None = None
+    token_type: str = "bearer"
+    must_change_password: bool = False
+    requires_2fa: bool = False
+    temp_token: str | None = None
+
+class ChangePasswordRequest(BaseModel):
+    temp_token: str
+    new_password: str
+
+class Verify2FARequest(BaseModel):
+    temp_token: str
+    code: str

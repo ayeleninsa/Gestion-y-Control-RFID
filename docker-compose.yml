@@ -1,0 +1,17 @@
+services:
+  postgres-rfid:
+    image: postgres:18.4
+    container_name: rfid-postgres
+    environment:
+      POSTGRES_DB: RFID
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "123456"
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata_rfid:/var/lib/postgresql
+      - ./RFID.sql:/docker-entrypoint-initdb.d/01-init.sql
+    restart: unless-stopped
+
+volumes:
+  pgdata_rfid:

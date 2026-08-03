@@ -9,6 +9,9 @@ from app.api.inventario import router as inventario_router
 from app.api.rfid import router as rfid_router
 from app.api.simulacion import router as simulacion_router
 from app.api.users import router as users_router
+from app.api.alumnos import router as alumnos_router
+from app.api.qr_events import router as qr_events_router
+from app.api.carreras import router as carreras_router
 from app.core.config import settings
 from app.services.seeder import seed_users, seed_personas, seed_camaras
 from app.services.simulador import simulador
@@ -45,6 +48,9 @@ app.include_router(users_router)
 app.include_router(inventario_router)
 app.include_router(rfid_router)
 app.include_router(simulacion_router)
+app.include_router(alumnos_router)
+app.include_router(qr_events_router)
+app.include_router(carreras_router)
 
 
 @app.get("/api/health")

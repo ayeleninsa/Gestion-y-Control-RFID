@@ -9,6 +9,13 @@ import AntenaRFID from './pages/AntenaRFID'
 import EventosQR from './pages/EventosQR'
 import Users from './pages/Users'
 import UserForm from './pages/UserForm'
+import Alumnos from './pages/Alumnos'
+import AlumnoForm from './pages/AlumnoForm'
+import Computadoras from './pages/Computadoras'
+import ComputadoraForm from './pages/ComputadoraForm'
+import Carreras from './pages/Carreras'
+import CarreraForm from './pages/CarreraForm'
+import RegistrosQR from './pages/RegistrosQR'
 
 export default function App() {
   return (
@@ -25,6 +32,7 @@ export default function App() {
           >
             <Route index element={<Dashboard />} />
             <Route path="eventos-qr" element={<EventosQR />} />
+            <Route path="registros-qr" element={<RegistrosQR />} />
             <Route path="antena-rfid" element={<AntenaRFID />} />
             <Route path="alertas" element={<Alertas />} />
             <Route
@@ -48,6 +56,78 @@ export default function App() {
               element={
                 <ProtectedRoute adminOnly>
                   <UserForm />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="alumnos"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'preceptor']}>
+                  <Alumnos />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="alumnos/nuevo"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'preceptor']}>
+                  <AlumnoForm />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="alumnos/:id/editar"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'preceptor']}>
+                  <AlumnoForm />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="computadoras"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'preceptor']}>
+                  <Computadoras />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="computadoras/nueva"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'preceptor']}>
+                  <ComputadoraForm />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="computadoras/:id/editar"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'preceptor']}>
+                  <ComputadoraForm />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="carreras"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'preceptor']}>
+                  <Carreras />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="carreras/nueva"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'preceptor']}>
+                  <CarreraForm />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="carreras/:id/editar"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'preceptor']}>
+                  <CarreraForm />
                 </ProtectedRoute>
               }
             />

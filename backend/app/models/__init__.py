@@ -8,6 +8,8 @@ from app.models.rfid_evento import RfidEvento
 from app.models.rfid_lector import RfidLector
 from app.models.rfid_tag import RfidTag
 from app.models.user import User
+from app.models.alumno import Alumno
+from app.models.carrera import Carrera
 
 __all__ = [
     "User",
@@ -20,4 +22,6 @@ __all__ = [
     "RfidLector",
     "RfidTag",
     "RfidEvento",
+    "Alumno",
+    "Carrera",
 ]

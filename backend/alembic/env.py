@@ -15,6 +15,8 @@ from app.models import (  # noqa: F401
     RfidLector,
     RfidTag,
     User,
+    Alumno,
+    Carrera,
 )
 
 config = context.config
