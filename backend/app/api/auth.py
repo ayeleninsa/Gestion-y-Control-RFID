@@ -8,12 +8,33 @@ from app.api.dependencies import get_current_user
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.user import User
-from app.schemas.user import Token, UserCreate, UserLogin, UserRead, LoginResponse, ChangePasswordRequest, Verify2FARequest
+from app.schemas.user import Token, UserCreate, UserLogin, UserRead, LoginResponse, ChangePasswordRequest, Verify2FARequest, CambiarContrasenaRequest
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
 # In-memory store for 2FA codes (user_id -> {"code": "123456", "expires_at": timestamp})
 _2fa_codes = {}
+
+# In-memory store for failed login attempts (email_key -> {"intentos": int, "bloqueado_hasta": timestamp})
+_failed_login = {}
+_ESPERA_SEGUNDOS = {1: 10, 2: 15}  # >= 3 -> 60
+
+
+def _espera_segun_intentos(intentos):
+    if intentos >= 3:
+        return 60
+    return _ESPERA_SEGUNDOS.get(intentos, 10)
+
+
+def _verificar_bloqueo(email_key: str):
+    rec = _failed_login.get(email_key)
+    if not rec or not rec["bloqueado_hasta"]:
+        return None
+    ahora = time.time()
+    if ahora < rec["bloqueado_hasta"]:
+        restante = int(rec["bloqueado_hasta"] - ahora) + 1
+        return restante
+    return None
 
 
 
@@ -43,14 +64,29 @@ async def register(data: UserCreate, db: AsyncSession = Depends(get_db)):
 
 @router.post("/login", response_model=LoginResponse)
 async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
+    email_key = data.email.strip().lower()
+
+    restante = _verificar_bloqueo(email_key)
+    if restante:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Demasiados intentos fallidos. Espera {restante} segundo(s) para volver a intentar.",
+        )
+
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(data.password, user.password_hash):
+        rec = _failed_login.get(email_key, {})
+        intentos = rec.get("intentos", 0) + 1
+        espera = _espera_segun_intentos(intentos)
+        _failed_login[email_key] = {"intentos": intentos, "bloqueado_hasta": time.time() + espera}
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email o contrasena incorrectos",
+            detail=f"Email o contrasena incorrectos. Intento fallido {intentos}. Espera {espera} segundo(s) para volver a intentar.",
         )
+
+    _failed_login.pop(email_key, None)
 
     if not user.activo:
         raise HTTPException(
@@ -129,3 +165,22 @@ async def verify_2fa(data: Verify2FARequest, db: AsyncSession = Depends(get_db))
 @router.get("/me", response_model=UserRead)
 async def me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.post("/cambiar-contrasena")
+async def cambiar_contrasena(
+    data: CambiarContrasenaRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not verify_password(data.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="La contrasena actual es incorrecta")
+
+    if len(data.new_password) < 4:
+        raise HTTPException(status_code=400, detail="La nueva contrasena es demasiado corta")
+
+    current_user.password_hash = hash_password(data.new_password)
+    current_user.must_change_password = False
+    await db.commit()
+
+    return {"message": "Contrasena actualizada correctamente"}

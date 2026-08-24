@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { Html5QrcodeScanner } from 'html5-qrcode'
-import { QrCode, Scan, Smartphone } from 'lucide-react'
+import { QrCode, Scan, Smartphone, Play, Square } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { getDynamicQR, validateDualQR } from '../services/qr'
+import { getDynamicQR, validateDualQR, getQrDinamicoEstado, getEstadoEscaneo } from '../services/qr'
 
 export default function EventosQR() {
   const { user } = useAuth()
@@ -12,6 +12,47 @@ export default function EventosQR() {
   // States for Preceptor/Admin
   const [dynamicQR, setDynamicQR] = useState('')
   const [expiresIn, setExpiresIn] = useState(0)
+  const [qrConsumido, setQrConsumido] = useState(false)
+  const [qrUsadoPor, setQrUsadoPor] = useState('')
+  const [estadoEscaneo, setEstadoEscaneo] = useState([])
+  const [autoMode, setAutoMode] = useState(false)
+  const regenTimerRef = useRef(null)
+
+  // Clear pending auto-regeneration timer
+  const clearRegenTimer = () => {
+    if (regenTimerRef.current) {
+      clearTimeout(regenTimerRef.current)
+      regenTimerRef.current = null
+    }
+  }
+
+  // Start auto-generation session
+  const startAutoMode = async () => {
+    setAutoMode(true)
+    clearRegenTimer()
+    await generateQR()
+  }
+
+  // Finaliza la sesión de QR: detiene la generación automática y oculta el QR activo.
+  // El día NO se cierra: los registros del día se mantienen y se puede reanudar después.
+  const finalizarSesionQR = () => {
+    clearRegenTimer()
+    setAutoMode(false)
+    setQrConsumido(false)
+    setQrUsadoPor('')
+    setDynamicQR('')
+    setExpiresIn(0)
+  }
+
+  // Fetch estado de escaneo (preceptor/admin)
+  const fetchEstadoEscaneo = async () => {
+    try {
+      const data = await getEstadoEscaneo()
+      setEstadoEscaneo(data)
+    } catch {
+      // ignore
+    }
+  }
   
   // States for Alumno
   const [scanStep, setScanStep] = useState(1) // 1 = Escanear PC (Fisico), 2 = Escanear Preceptor (Dinamico)
@@ -27,6 +68,8 @@ export default function EventosQR() {
       const data = await getDynamicQR()
       setDynamicQR(data.qr_token)
       setExpiresIn(data.expires_in)
+      setQrConsumido(false)
+      setQrUsadoPor('')
     } catch (err) {
       console.error(err)
       alert("Error al generar QR dinámico")
@@ -49,6 +92,58 @@ export default function EventosQR() {
     }
     return () => clearInterval(interval)
   }, [expiresIn])
+
+  // Preceptor Live-consumption polling
+  useEffect(() => {
+    if (!dynamicQR || qrConsumido) return
+    const check = async () => {
+      try {
+        const st = await getQrDinamicoEstado(dynamicQR)
+        if (st.usado) {
+          setQrConsumido(true)
+          setQrUsadoPor(st.alumno_nombre || 'un alumno')
+          setDynamicQR('')
+          setExpiresIn(0)
+          if (autoMode) {
+            clearRegenTimer()
+            regenTimerRef.current = setTimeout(() => {
+              regenTimerRef.current = null
+              generateQR()
+            }, 2500)
+          }
+        }
+      } catch {
+        // ignora errores transitorios de polling
+      }
+    }
+    check()
+    const interval = setInterval(check, 3000)
+    return () => clearInterval(interval)
+  }, [dynamicQR, qrConsumido, autoMode])
+
+  // Auto-regenera si el QR expira sin usarse mientras la sesión sigue activa
+  useEffect(() => {
+    clearRegenTimer()
+    return clearRegenTimer
+  }, [])
+
+  useEffect(() => {
+    if (!autoMode || dynamicQR || qrConsumido) return
+    clearRegenTimer()
+    regenTimerRef.current = setTimeout(() => {
+      regenTimerRef.current = null
+      generateQR()
+    }, 2500)
+    return () => clearRegenTimer()
+  }, [autoMode, dynamicQR, qrConsumido])
+
+  // Estado de escaneo (preceptor/admin): carga inicial + refresh cada 30s
+  useEffect(() => {
+    if (isAlumno) return
+    fetchEstadoEscaneo()
+    const interval = setInterval(fetchEstadoEscaneo, 30000)
+    return () => clearInterval(interval)
+  }, [isAlumno])
 
   // Alumno Scanner Effect
   useEffect(() => {
@@ -226,14 +321,63 @@ export default function EventosQR() {
             Haz clic en generar para mostrar tu código QR de validación. El alumno deberá escanearlo luego de escanear su PC.
           </p>
           
-          {!dynamicQR ? (
-            <button
-              onClick={generateQR}
-              className="px-8 py-4 bg-[#006143] text-white rounded-xl font-bold text-lg hover:bg-[#004d35] transition-all shadow-lg shadow-[#006143]/20"
-            >
-              Generar QR Dinámico
-            </button>
-          ) : (
+          {!autoMode && !dynamicQR && !qrConsumido && (
+            <div className="flex flex-col items-center space-y-4">
+              <button
+                onClick={startAutoMode}
+                className="w-full max-w-xs px-8 py-4 bg-[#24c48a] text-white rounded-xl font-bold text-lg hover:bg-[#1da875] transition-all shadow-lg shadow-[#24c48a]/20 inline-flex items-center justify-center space-x-2"
+              >
+                <Play className="w-5 h-5" />
+                <span>Iniciar QR Automático</span>
+              </button>
+              <button
+                onClick={generateQR}
+                className="px-6 py-3 border border-[#006143] text-[#006143] rounded-xl font-semibold hover:bg-[#006143]/10 transition-colors"
+              >
+                Generar QR Dinámico (una vez)
+              </button>
+            </div>
+          )}
+
+          {autoMode && !dynamicQR && (
+            <div className="flex flex-col items-center mb-6">
+              <span className="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-[#24c48a]/15 text-[#006143] mb-2">
+                <span className="w-2 h-2 bg-[#24c48a] rounded-full mr-2 animate-pulse"></span>
+                Sesión de QR activa
+              </span>
+              <p className="text-xs text-slate-500 mb-3">
+                Se genera un QR nuevo automáticamente tras cada uso o vencimiento.
+              </p>
+            </div>
+          )}
+
+          {!dynamicQR && !qrConsumido && !autoMode && (
+            <p className="text-xs text-slate-400 italic">
+              Presiona "Iniciar QR Automático" para generar QRs en cadena hasta dar por finalizada la sesión, o genera uno manualmente.
+            </p>
+          )}
+
+          {qrConsumido && (
+            <div className="flex flex-col items-center">
+              <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mb-4">
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              </div>
+              <h3 className="text-lg font-bold text-slate-800 mb-2">QR ya utilizado</h3>
+              <p className="text-sm text-slate-500 mb-6">
+                Este QR ya fue escaneado por <strong>{qrUsadoPor}</strong>. {autoMode ? 'Se está generando el siguiente QR automáticamente...' : 'Generá uno nuevo para el próximo alumno (el tiempo vuelve a 60 segundos).'}
+              </p>
+              {!autoMode && (
+                <button
+                  onClick={generateQR}
+                  className="px-8 py-4 bg-[#006143] text-white rounded-xl font-bold text-lg hover:bg-[#004d35] transition-all shadow-lg shadow-[#006143]/20"
+                >
+                  Generar Nuevo QR
+                </button>
+              )}
+            </div>
+          )}
+
+          {dynamicQR && (
             <div className="flex flex-col items-center">
               <div className="p-4 bg-white border-4 border-slate-100 rounded-2xl inline-block mb-4 shadow-sm">
                 <QRCodeSVG value={dynamicQR} size={200} />
@@ -251,6 +395,16 @@ export default function EventosQR() {
                 ></div>
               </div>
             </div>
+          )}
+
+          {autoMode && (
+            <button
+              onClick={finalizarSesionQR}
+              className="mt-6 px-6 py-3 bg-red-50 text-red-600 border border-red-200 rounded-xl font-semibold hover:bg-red-100 transition-colors inline-flex items-center justify-center space-x-2 w-full max-w-xs"
+            >
+              <Square className="w-4 h-4" />
+              <span>Dar por finalizado</span>
+            </button>
           )}
         </div>
         
@@ -277,6 +431,89 @@ export default function EventosQR() {
             </h4>
             <p className="text-slate-300 text-sm">El alumno escanea tu QR dinámico. El sistema procesará el evento automáticamente.</p>
           </div>
+        </div>
+      </div>
+
+      {/* Estado de escaneo por alumno */}
+      <div className="mt-10">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-xl font-bold text-slate-900">Estado de escaneo por alumno</h3>
+            <p className="text-sm text-slate-500">Quiénes completaron el flujo de QR hoy y quiénes no escanearon.</p>
+          </div>
+          <button
+            onClick={fetchEstadoEscaneo}
+            className="px-4 py-2 text-sm border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors"
+          >
+            Actualizar
+          </button>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          {estadoEscaneo.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 text-sm">
+              No hay alumnos cargados con computadora asignada.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-3">Alumno</th>
+                    <th className="px-6 py-3">Computadora</th>
+                    <th className="px-6 py-3">Estado</th>
+                    <th className="px-6 py-3">Antena</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {estadoEscaneo.map((row) => (
+                    <tr key={row.id_alumno} className="border-b border-slate-100 last:border-0">
+                      <td className="px-6 py-3">
+                        <div className="font-semibold text-slate-800">{row.alumno}</div>
+                        <div className="text-xs text-slate-400">DNI {row.dni} · {row.carrera || 'Sin carrera'}</div>
+                      </td>
+                      <td className="px-6 py-3">
+                        <div className="text-slate-700">{row.computadora_modelo || 'Sin PC'}</div>
+                        <div className="text-xs text-slate-400 font-mono">{row.computadora_tag || '—'}</div>
+                      </td>
+                      <td className="px-6 py-3">
+                        {row.estado === 'AMBOS' && (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
+                            Ambos QR escaneados
+                          </span>
+                        )}
+                        {row.estado === 'FALTA_QRFISICO' && (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                            Solo QR dinámico (falta el físico)
+                          </span>
+                        )}
+                        {row.estado === 'NO_ESCANEO_NINGUN_QR' && (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                            No escaneó ningún QR
+                          </span>
+                        )}
+                        {row.estado === 'SIN_ACTIVIDAD' && (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+                            Sin actividad hoy
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-3 text-slate-600">
+                        {row.paso_por_antena_hoy ? (
+                          <span className="inline-flex items-center text-amber-600">
+                            <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8z"/></svg>
+                            Detectada
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </div>

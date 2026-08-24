@@ -2,7 +2,7 @@ import axios from 'axios'
 import api from './api'
 
 const loginApi = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
 })
 
 export async function login(email, password) {
@@ -27,5 +27,10 @@ export async function register(data) {
 
 export async function getMe() {
   const res = await api.get('/auth/me')
+  return res.data
+}
+
+export async function cambiarContrasena(current_password, new_password) {
+  const res = await api.post('/auth/cambiar-contrasena', { current_password, new_password })
   return res.data
 }

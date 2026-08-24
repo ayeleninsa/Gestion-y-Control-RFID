@@ -1,5 +1,10 @@
 import api from './api'
 
+export async function getMiPerfil() {
+  const res = await api.get('/alumnos/me')
+  return res.data
+}
+
 export async function getAlumnos() {
   const res = await api.get('/alumnos/')
   return res.data

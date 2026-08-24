@@ -12,6 +12,7 @@ from app.api.users import router as users_router
 from app.api.alumnos import router as alumnos_router
 from app.api.qr_events import router as qr_events_router
 from app.api.carreras import router as carreras_router
+from app.api.prestamos import router as prestamos_router
 from app.core.config import settings
 from app.services.seeder import seed_users, seed_personas, seed_camaras
 from app.services.simulador import simulador
@@ -20,11 +21,15 @@ from app.services.simulador import simulador
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await seed_users()
-    persona_ids = await seed_personas()
-    await seed_camaras(persona_ids)
-    simulador.iniciar()
+    # seed de personas/cámaras/eventos desactivado por pedido del usuario
+    # (evita que se recreen al reiniciar el backend)
+    # persona_ids = await seed_personas()
+    # await seed_camaras(persona_ids)
+    if settings.simulador_enabled:
+        simulador.iniciar()
     yield
-    simulador.detener()
+    if settings.simulador_enabled:
+        simulador.detener()
 
 
 app = FastAPI(
@@ -51,6 +56,7 @@ app.include_router(simulacion_router)
 app.include_router(alumnos_router)
 app.include_router(qr_events_router)
 app.include_router(carreras_router)
+app.include_router(prestamos_router)
 
 
 @app.get("/api/health")

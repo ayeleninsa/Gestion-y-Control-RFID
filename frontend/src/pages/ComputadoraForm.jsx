@@ -87,7 +87,7 @@ export default function ComputadoraForm() {
         {error && <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-lg">{error}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Marca</label>
               <input
@@ -112,7 +112,7 @@ export default function ComputadoraForm() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Número de Serie</label>
               <input
@@ -137,7 +137,7 @@ export default function ComputadoraForm() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Estado</label>
               <select

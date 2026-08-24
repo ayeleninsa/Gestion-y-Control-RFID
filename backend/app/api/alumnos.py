@@ -1,5 +1,7 @@
+import csv
 import io
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from openpyxl import load_workbook
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -12,10 +14,56 @@ from app.models.persona import Persona
 from app.models.user import User
 from app.models.carrera import Carrera
 from app.models.computadoras import Computadoras
-from app.schemas.alumno import AlumnoCreate, AlumnoRead, AlumnoUpdate
-import pandas as pd
+from app.schemas.alumno import AlumnoCreate, AlumnoRead, AlumnoUpdate, AlumnoPerfilRead, ComputadoraPerfil
 
 router = APIRouter(prefix="/api/alumnos", tags=["Alumnos"])
+
+
+@router.get("/me", response_model=AlumnoPerfilRead)
+async def get_mi_perfil(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.rol != "alumno":
+        raise HTTPException(status_code=403, detail="Acceso denegado")
+
+    if not current_user.id_persona:
+        raise HTTPException(status_code=404, detail="Perfil de persona no encontrado")
+
+    result = await db.execute(
+        select(Alumno).options(
+            selectinload(Alumno.persona),
+            selectinload(Alumno.carrera),
+            selectinload(Alumno.computadora),
+        ).where(Alumno.id_persona == current_user.id_persona)
+    )
+    alumno = result.scalar_one_or_none()
+    if not alumno:
+        raise HTTPException(status_code=404, detail="Registro de alumno no encontrado")
+
+    computadora = None
+    if alumno.computadora:
+        computadora = ComputadoraPerfil(
+            id_computadoras=alumno.computadora.id_computadoras,
+            modelo=alumno.computadora.modelo,
+            tag_rfid=alumno.computadora.tag_rfid,
+            estado=alumno.computadora.estado,
+            activa=alumno.computadora.activa,
+        )
+
+    return AlumnoPerfilRead(
+        id_alumnos=alumno.id_alumnos,
+        id_persona=alumno.id_persona,
+        nombre=alumno.persona.nombre if alumno.persona else None,
+        apellido=alumno.persona.apellido if alumno.persona else None,
+        dni=alumno.persona.dni if alumno.persona else None,
+        correo=alumno.persona.correo if alumno.persona else None,
+        anio_en_curso=alumno.anio_en_curso,
+        id_carrera=alumno.id_carrera,
+        carrera_nombre=alumno.carrera.nombre if alumno.carrera else None,
+        computadora=computadora,
+    )
+
+
+def _celda(valor):
+    return "" if valor is None else str(valor).strip()
 
 def _to_read_schema(alumno: Alumno) -> AlumnoRead:
     return AlumnoRead(
@@ -109,36 +157,47 @@ async def import_alumnos(file: UploadFile = File(...), db: AsyncSession = Depend
         
     contents = await file.read()
     try:
+        rows = []
         if file.filename.endswith('.csv'):
-            df = pd.read_csv(io.BytesIO(contents))
+            texto = contents.decode("utf-8-sig", errors="replace")
+            reader = csv.DictReader(io.StringIO(texto))
+            rows = list(reader)
         else:
-            df = pd.read_excel(io.BytesIO(contents))
-            
+            wb = load_workbook(io.BytesIO(contents), read_only=True, data_only=True)
+            ws = wb.active
+            header = [_celda(c) for c in next(ws.iter_rows(min_row=1, max_row=1))]
+            for r in ws.iter_rows(min_row=2, values_only=True):
+                rows.append(dict(zip(header, r)))
+            wb.close()
+
         # Expected columns: nombre, apellido, dni, correo, anio_en_curso, id_carrera
         required_cols = ["nombre", "apellido", "dni", "correo", "anio_en_curso", "id_carrera"]
+        if not rows:
+            raise HTTPException(status_code=400, detail="El archivo no contiene filas")
+        first_keys = set(rows[0].keys())
         for col in required_cols:
-            if col not in df.columns:
+            if col not in first_keys:
                 raise HTTPException(status_code=400, detail=f"Columna faltante: {col}")
-                
+
         imported_count = 0
-        for _, row in df.iterrows():
-            dni = str(row['dni'])
-            correo = str(row['correo'])
-            
+        for row in rows:
+            dni = _celda(row.get('dni'))
+            correo = _celda(row.get('correo'))
+
             # Skip existing
             res = await db.execute(select(Persona).where((Persona.dni == dni) | (Persona.correo == correo)))
             if res.scalar_one_or_none():
                 continue
-                
+
             persona = Persona(
-                nombre=str(row['nombre']),
-                apellido=str(row['apellido']),
+                nombre=_celda(row.get('nombre')),
+                apellido=_celda(row.get('apellido')),
                 dni=dni,
                 correo=correo
             )
             db.add(persona)
             await db.flush()
-            
+
             user = User(
                 email=correo,
                 username=correo.split("@")[0] + "_" + dni[-4:],
@@ -148,8 +207,8 @@ async def import_alumnos(file: UploadFile = File(...), db: AsyncSession = Depend
                 must_change_password=True
             )
             db.add(user)
-            
-            carrera_id = int(row['id_carrera'])
+
+            carrera_id = int(_celda(row.get('id_carrera')))
             carrera_res = await db.execute(select(Carrera).where(Carrera.id_carrera == carrera_id))
             if not carrera_res.scalar_one_or_none():
                 raise HTTPException(status_code=400, detail=f"La carrera (ID: {carrera_id}) para el alumno {dni} no existe")
@@ -157,12 +216,12 @@ async def import_alumnos(file: UploadFile = File(...), db: AsyncSession = Depend
             alumno = Alumno(
                 id_persona=persona.id_persona,
                 id_carrera=carrera_id,
-                anio_en_curso=int(row['anio_en_curso']),
+                anio_en_curso=int(_celda(row.get('anio_en_curso'))),
                 id_computadoras=None
             )
             db.add(alumno)
             imported_count += 1
-            
+
         await db.commit()
         return {"message": f"Se importaron {imported_count} alumnos correctamente"}
     except Exception as e:

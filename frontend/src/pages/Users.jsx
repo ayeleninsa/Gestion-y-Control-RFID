@@ -48,6 +48,7 @@ export default function Users() {
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-600">
             <tr>
@@ -101,6 +102,7 @@ export default function Users() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   )

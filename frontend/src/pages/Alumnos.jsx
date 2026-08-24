@@ -69,16 +69,16 @@ export default function Alumnos() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold text-slate-800">Alumnos</h1>
-        <div className="flex space-x-3">
-          <label className={`cursor-pointer px-4 py-2 bg-[#24c48a] text-white rounded-lg hover:bg-[#1da875] transition-colors flex items-center ${importing ? 'opacity-50' : ''}`}>
+        <div className="flex flex-wrap gap-3">
+          <label className={`cursor-pointer px-4 py-2 bg-[#24c48a] text-white rounded-lg hover:bg-[#1da875] transition-colors flex items-center justify-center ${importing ? 'opacity-50' : ''}`}>
             {importing ? 'Importando...' : 'Importar Excel'}
             <input type="file" className="hidden" accept=".xlsx,.xls,.csv" onChange={handleImport} disabled={importing} />
           </label>
           <Link
             to="/alumnos/nuevo"
-            className="px-4 py-2 bg-[#006143] text-white rounded-lg hover:bg-[#004d35] transition-colors flex items-center"
+            className="px-4 py-2 bg-[#006143] text-white rounded-lg hover:bg-[#004d35] transition-colors flex items-center justify-center"
           >
             Nuevo Alumno
           </Link>

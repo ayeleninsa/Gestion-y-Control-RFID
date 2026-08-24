@@ -53,6 +53,10 @@ class ChangePasswordRequest(BaseModel):
     temp_token: str
     new_password: str
 
+class CambiarContrasenaRequest(BaseModel):
+    current_password: str
+    new_password: str
+
 class Verify2FARequest(BaseModel):
     temp_token: str
     code: str

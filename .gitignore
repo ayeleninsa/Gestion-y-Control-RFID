@@ -31,3 +31,6 @@ backend/alembic/versions/*.pyc
 
 # Logs
 *.log
+
+# QRs impresos con datos personales de alumnos (no subir al repo)
+qr/

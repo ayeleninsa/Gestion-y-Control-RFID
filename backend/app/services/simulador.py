@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import random
 import threading
@@ -338,6 +339,8 @@ class SimuladorService:
                     "computadora": pc["id_unico"],
                     "detalle": detalle,
                 })
+                if direccion == "salida":
+                    self._persistir_salida_lectura_rfid()
             elif tipo == "qr_scanned":
                 modo = random.choice(["fisico", "dinamico"])
                 if modo == "fisico":
@@ -424,6 +427,40 @@ class SimuladorService:
     def get_eventos_qr(self, limite=20):
         with self._lock:
             return self.eventos_qr[:limite]
+
+    def _persistir_salida_lectura_rfid(self):
+        """Persiste la salida de una computadora en la tabla real lectura_rfid,
+        eligiendo una computadora real de la DB (para que el estado-escaneo
+        por antena funcione con datos coherentes)."""
+        try:
+            async def _insert():
+                from sqlalchemy import func, select
+
+                from app.core.database import async_session
+                from app.models.computadoras import Computadoras
+                from app.models.lectura_rfid import LecturaRFID
+
+                async with async_session() as session:
+                    res = await session.execute(
+                        select(Computadoras)
+                        .where(Computadoras.activa.is_(True))
+                        .order_by(func.random())
+                        .limit(1)
+                    )
+                    pc = res.scalars().first()
+                    if pc:
+                        session.add(
+                            LecturaRFID(
+                                tag_rfid=pc.tag_rfid,
+                                id_computadoras=pc.id_computadoras,
+                                lector_origen=antenas[0],
+                            )
+                        )
+                        await session.commit()
+
+            asyncio.run(_insert())
+        except Exception as e:
+            print(f"[SIMULADOR] no se pudo persistir salida de antena: {e}")
 
     def get_lecturas_antenna(self, limite=20):
         with self._lock:

@@ -80,5 +80,5 @@ async def eliminar_carrera(
     if not carrera:
         raise HTTPException(status_code=404, detail="Carrera no encontrada")
 
-    db.delete(carrera)
+    await db.delete(carrera)
     await db.commit()

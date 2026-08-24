@@ -34,3 +34,24 @@ class AlumnoRead(BaseModel):
     computadora_tag: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class ComputadoraPerfil(BaseModel):
+    id_computadoras: int
+    modelo: str | None = None
+    tag_rfid: str | None = None
+    estado: str | None = None
+    activa: bool | None = None
+
+
+class AlumnoPerfilRead(BaseModel):
+    id_alumnos: int
+    id_persona: int | None = None
+    nombre: str | None = None
+    apellido: str | None = None
+    dni: str | None = None
+    correo: str | None = None
+    anio_en_curso: int | None = None
+    id_carrera: int | None = None
+    carrera_nombre: str | None = None
+    computadora: ComputadoraPerfil | None = None

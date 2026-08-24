@@ -1,14 +1,47 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { getComputadoras, deleteComputadora } from '../services/computadoras'
+import { getAlumnoPorDni } from '../services/qr'
 import { QRCodeSVG } from 'qrcode.react'
-import { QrCode, X } from 'lucide-react'
+import { QrCode, X, Loader2 } from 'lucide-react'
 export default function Computadoras() {
   const [computadoras, setComputadoras] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [selectedQR, setSelectedQR] = useState(null)
+  const [qrInfo, setQrInfo] = useState(null)
+  const [qrLoading, setQrLoading] = useState(false)
+  const [qrError, setQrError] = useState('')
+
+  const buildQRText = (info) => {
+    const lines = []
+    if (info?.alumno) {
+      lines.push(`ALUMNO: ${info.alumno.nombre} ${info.alumno.apellido}`)
+      lines.push(`DNI: ${info.alumno.dni}`)
+      lines.push(`CARRERA: ${info.carrera || ''}`)
+    }
+    lines.push(`COMPUTADORA: ${info?.computadora?.modelo || ''}`)
+    if (info?.computadora?.tag_rfid) lines.push(`TAG RFID: ${info.computadora.tag_rfid}`)
+    lines.push(`ESTADO: ${info?.computadora?.estado || ''}`)
+    return lines.join('\n')
+  }
+
+  const openQR = async (c) => {
+    setSelectedQR(c)
+    setQrInfo(null)
+    setQrError('')
+    if (!c.tag_rfid) return
+    setQrLoading(true)
+    try {
+      const data = await getAlumnoPorDni(c.tag_rfid)
+      setQrInfo(data)
+    } catch (err) {
+      setQrError(err.response?.data?.detail || 'No se pudo obtener la información del alumno.')
+    } finally {
+      setQrLoading(false)
+    }
+  }
 
   const fetchComputadoras = async () => {
     try {
@@ -39,9 +72,7 @@ export default function Computadoras() {
   const filteredComputadoras = computadoras.filter(c => {
     const term = search.toLowerCase()
     return (
-      (c.marca && c.marca.toLowerCase().includes(term)) ||
       (c.modelo && c.modelo.toLowerCase().includes(term)) ||
-      (c.nro_serie && c.nro_serie.toLowerCase().includes(term)) ||
       (c.tag_rfid && c.tag_rfid.toLowerCase().includes(term)) ||
       (c.estado && c.estado.toLowerCase().includes(term))
     )
@@ -52,11 +83,11 @@ export default function Computadoras() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold text-slate-800">Computadoras</h1>
         <Link
           to="/computadoras/nueva"
-          className="px-4 py-2 bg-[#006143] text-white rounded-lg hover:bg-[#004d35] transition-colors"
+          className="px-4 py-2 bg-[#006143] text-white rounded-lg hover:bg-[#004d35] transition-colors text-center"
         >
           Nueva Computadora
         </Link>
@@ -65,7 +96,7 @@ export default function Computadoras() {
       <div className="mb-6">
         <input
           type="text"
-          placeholder="Buscar por marca, modelo, N/S, RFID o estado..."
+          placeholder="Buscar por modelo, RFID o estado..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#006143]/20 focus:border-[#006143]"
@@ -77,8 +108,7 @@ export default function Computadoras() {
           <table className="w-full text-left text-sm text-slate-600">
             <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
               <tr>
-                <th className="px-6 py-4">Marca/Modelo</th>
-                <th className="px-6 py-4">N° Serie</th>
+                <th className="px-6 py-4">Modelo</th>
                 <th className="px-6 py-4">Tag RFID</th>
                 <th className="px-6 py-4">Estado</th>
                 <th className="px-6 py-4 text-right">Acciones</th>
@@ -88,9 +118,8 @@ export default function Computadoras() {
               {filteredComputadoras.map((c) => (
                 <tr key={c.id_computadoras} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4 font-medium text-slate-800">
-                    {c.marca} {c.modelo}
+                    {c.modelo}
                   </td>
-                  <td className="px-6 py-4">{c.nro_serie}</td>
                   <td className="px-6 py-4 font-mono text-xs text-slate-500 bg-slate-100 p-1 rounded inline-block mt-3">{c.tag_rfid || 'Sin Asignar'}</td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -103,7 +132,7 @@ export default function Computadoras() {
                   </td>
                   <td className="px-6 py-4 text-right whitespace-nowrap">
                     <button
-                      onClick={() => setSelectedQR(c)}
+                      onClick={() => openQR(c)}
                       className="text-indigo-600 hover:text-indigo-800 font-medium mr-4 inline-flex items-center gap-1"
                       title="Ver QR"
                     >
@@ -126,7 +155,7 @@ export default function Computadoras() {
               ))}
               {filteredComputadoras.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-slate-500">
+                  <td colSpan="4" className="px-6 py-8 text-center text-slate-500">
                     No se encontraron computadoras
                   </td>
                 </tr>
@@ -142,7 +171,7 @@ export default function Computadoras() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
             <div className="flex justify-between items-center p-4 border-b border-slate-100">
               <h3 className="font-bold text-slate-800">
-                QR - {selectedQR.marca} {selectedQR.modelo}
+                QR - {selectedQR.modelo}
               </h3>
               <button
                 onClick={() => setSelectedQR(null)}
@@ -152,19 +181,44 @@ export default function Computadoras() {
               </button>
             </div>
             <div className="p-6 flex flex-col items-center">
-              {selectedQR.tag_rfid ? (
+              {selectedQR.tag_rfid && qrLoading && (
+                <div className="py-8 flex flex-col items-center">
+                  <Loader2 className="w-8 h-8 text-[#006143] animate-spin" />
+                  <p className="text-sm text-slate-500 mt-3">Generando QR...</p>
+                </div>
+              )}
+
+              {selectedQR.tag_rfid && qrError && (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-red-50 text-red-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <QrCode className="w-8 h-8" />
+                  </div>
+                  <p className="text-slate-600 font-medium">No se pudo generar el QR</p>
+                  <p className="text-sm text-slate-500 mt-2">{qrError}</p>
+                </div>
+              )}
+
+              {selectedQR.tag_rfid && !qrLoading && !qrError && qrInfo && (
                 <>
                   <div className="p-4 bg-white border-4 border-slate-100 rounded-2xl shadow-sm mb-4">
-                    <QRCodeSVG value={selectedQR.tag_rfid} size={200} />
+                    <QRCodeSVG value={buildQRText(qrInfo)} size={200} />
                   </div>
-                  <p className="text-sm font-mono bg-slate-100 px-3 py-1 rounded text-slate-600">
-                    {selectedQR.tag_rfid}
-                  </p>
                   <p className="text-xs text-slate-500 mt-4 text-center">
-                    Este es el código QR de la computadora.
+                    Escaneá este código con el celular para ver los datos del alumno en texto.
                   </p>
                 </>
-              ) : (
+              )}
+
+              {selectedQR.tag_rfid && !qrLoading && !qrError && !qrInfo && (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-red-50 text-red-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <QrCode className="w-8 h-8" />
+                  </div>
+                  <p className="text-slate-600 font-medium">Sin datos para generar el QR</p>
+                </div>
+              )}
+
+              {!selectedQR.tag_rfid && (
                 <div className="text-center py-8">
                   <div className="w-16 h-16 bg-red-50 text-red-400 rounded-full flex items-center justify-center mx-auto mb-4">
                     <QrCode className="w-8 h-8" />

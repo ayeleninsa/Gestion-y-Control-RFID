@@ -111,7 +111,7 @@ export default function AlumnoForm() {
         {error && <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-lg">{error}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Nombre</label>
               <input
@@ -136,7 +136,7 @@ export default function AlumnoForm() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">DNI</label>
               <input
@@ -178,7 +178,7 @@ export default function AlumnoForm() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Carrera</label>
               <select

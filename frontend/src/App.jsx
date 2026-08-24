@@ -1,7 +1,8 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { AuthProvider } from './context/AuthContext'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Layout from './components/Layout'
+import AlumnoLayout from './components/AlumnoLayout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Alertas from './pages/Alertas'
@@ -16,6 +17,20 @@ import ComputadoraForm from './pages/ComputadoraForm'
 import Carreras from './pages/Carreras'
 import CarreraForm from './pages/CarreraForm'
 import RegistrosQR from './pages/RegistrosQR'
+import AlumnoHome from './pages/AlumnoHome'
+import EscanerQR from './pages/EscanerQR'
+import AlumnoQR from './pages/AlumnoQR'
+import Prestamos from './pages/Prestamos'
+
+function AppShell() {
+  const { user } = useAuth()
+  return user?.rol === 'alumno' ? <AlumnoLayout /> : <Layout />
+}
+
+function HomeIndex() {
+  const { user } = useAuth()
+  return user?.rol === 'alumno' ? <AlumnoHome /> : <Dashboard />
+}
 
 export default function App() {
   return (
@@ -23,16 +38,41 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/alumno-qr/:dni" element={<AlumnoQR />} />
           <Route
             element={
               <ProtectedRoute>
-                <Layout />
+                <AppShell />
               </ProtectedRoute>
             }
           >
-            <Route index element={<Dashboard />} />
+            <Route index element={<HomeIndex />} />
+            <Route
+              path="alumno"
+              element={
+                <ProtectedRoute allowedRoles={['alumno']}>
+                  <AlumnoHome />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="alumno/escaneo"
+              element={
+                <ProtectedRoute allowedRoles={['alumno']}>
+                  <EscanerQR />
+                </ProtectedRoute>
+              }
+            />
             <Route path="eventos-qr" element={<EventosQR />} />
             <Route path="registros-qr" element={<RegistrosQR />} />
+            <Route
+              path="prestamos"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'preceptor']}>
+                  <Prestamos />
+                </ProtectedRoute>
+              }
+            />
             <Route path="antena-rfid" element={<AntenaRFID />} />
             <Route path="alertas" element={<Alertas />} />
             <Route

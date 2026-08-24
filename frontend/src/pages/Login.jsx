@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getMe, login, verify2fa, changePassword } from '../services/auth'
 import { useAuth } from '../context/AuthContext'
@@ -8,6 +8,8 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
+  const [cooldown, setCooldown] = useState(0)
+  const [submitting, setSubmitting] = useState(false)
   
   // Flow states: 'login', 'change_password', '2fa'
   const [step, setStep] = useState('login')
@@ -18,6 +20,14 @@ export default function Login() {
   const { setUser } = useAuth()
   const navigate = useNavigate()
 
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const timer = setInterval(() => {
+      setCooldown((c) => (c > 0 ? c - 1 : 0))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [cooldown])
+
   const handleFinishLogin = async (token) => {
     localStorage.setItem('token', token)
     const me = await getMe()
@@ -27,7 +37,9 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (cooldown > 0 || submitting) return
     setError('')
+    setSubmitting(true)
     try {
       const data = await login(email, password)
       if (data.must_change_password) {
@@ -39,8 +51,13 @@ export default function Login() {
       } else {
         await handleFinishLogin(data.access_token)
       }
-    } catch {
-      setError('Email o contrasena incorrectos')
+    } catch (err) {
+      const detail = err.response?.data?.detail || 'Email o contrasena incorrectos'
+      setError(detail)
+      const match = String(detail).match(/Espera (\d+) segundo/)
+      if (match) setCooldown(Number(match[1]))
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -80,7 +97,7 @@ export default function Login() {
         }}
       >
         <div className="z-10">
-          <div className="flex flex-col items-center w-fit">
+          <div className="flex flex-col items-center w-fit mx-auto">
             <div className="border-2 border-white p-4 mb-4">
               <span className="text-4xl font-light tracking-tighter">
                 I<span className="text-[#24c48a]">P</span>F
@@ -95,7 +112,7 @@ export default function Login() {
           </div>
         </div>
 
-        <div className="z-10 max-w-md">
+        <div className="z-10 max-w-md mt-16">
           <h1 className="text-4xl font-bold mb-4">
             <span className="text-[#24c48a]">IPF</span> SmartTrack
           </h1>
@@ -127,7 +144,7 @@ export default function Login() {
       </section>
 
       <main className="w-full lg:w-1/2 flex flex-col items-center justify-center p-6 bg-[#f3f6f9]">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-[450px] p-10 md:p-12">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-[450px] p-6 sm:p-10 md:p-12">
           <div className="text-center mb-10">
             <h2 className="text-3xl font-bold text-slate-800 mb-2">Bienvenido</h2>
             <p className="text-slate-500 text-sm">Inicia sesion para continuar en IPF SmartTrack</p>
@@ -210,12 +227,15 @@ export default function Login() {
 
               <button
                 type="submit"
-                className="w-full bg-[#006143] text-white font-semibold py-4 rounded-lg flex items-center justify-center space-x-2 hover:bg-[#004d35] transition-colors shadow-lg shadow-[#006143]/20 mt-8"
+                disabled={cooldown > 0 || submitting}
+                className="w-full bg-[#006143] text-white font-semibold py-4 rounded-lg flex items-center justify-center space-x-2 hover:bg-[#004d35] transition-colors shadow-lg shadow-[#006143]/20 mt-8 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#006143]"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
                 </svg>
-                <span>Iniciar sesion</span>
+                <span>
+                  {cooldown > 0 ? `Espera ${cooldown}s para reintentar` : submitting ? 'Ingresando...' : 'Iniciar sesion'}
+                </span>
               </button>
             </form>
           )}
@@ -279,7 +299,7 @@ export default function Login() {
           {import.meta.env.VITE_APP_ENV === 'development' && (
             <div className="mt-8 pt-6 border-t border-slate-200">
               <p className="text-xs text-slate-400 mb-3 text-center">Acceso rapido (desarrollo)</p>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 <button
                   type="button"
                   onClick={() => { setEmail('admin@test.com'); setPassword('admin123'); setStep('login') }}
@@ -296,7 +316,7 @@ export default function Login() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setEmail('alumno@test.com'); setPassword('alumno123'); setStep('login') }}
+                  onClick={() => { setEmail('ayelen.insa36@gmail.com'); setPassword('alumno123'); setStep('login') }}
                   className="flex-1 bg-[#006143]/10 text-[#006143] text-xs font-medium py-2.5 rounded-lg hover:bg-[#006143]/20 transition-colors border border-[#006143]"
                 >
                   Alumno
