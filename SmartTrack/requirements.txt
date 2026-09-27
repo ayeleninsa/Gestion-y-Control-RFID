@@ -1,0 +1,14 @@
+ultralytics
+opencv-python
+numpy
+requests
+python-dotenv
+roboflow
+onnxruntime   # para modelos/best.onnx
+lap           # para el tracking con ByteTrack
+
+# Solo para herramientas/autoetiquetar_grounding_dino.py
+# torch
+# torchvision
+# transformers
+# pillow

@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Laptop, RefreshCw, Users, UserCheck, ShieldCheck, Bell,
-  Search, Calendar, Check, AlertTriangle, ChevronRight,
+  Search, Calendar, Check, AlertTriangle, ChevronRight, Video, WifiOff, Package,
 } from 'lucide-react'
 import api from '../services/api'
+import { getCamaras, getConteoIA } from '../services/camaras'
 
 const statMeta = [
-  { key: 'computadoras_disponibles', icon: Laptop, label: 'Notebooks disponibles', badge: 'Disponible', color: 'bg-emerald-900' },
-  { key: 'prestamos_activos', icon: RefreshCw, label: 'Prestamos activos', badge: 'Activos', color: 'bg-emerald-700' },
-  { key: 'alumnos_registrados', icon: Users, label: 'Alumnos registrados', badge: 'Total', color: 'bg-slate-700' },
+  { key: 'computadoras_disponibles', icon: Laptop, label: 'Notebooks disponibles', badge: 'Disponible', color: 'bg-emerald-900', link: '/computadoras' },
+  { key: 'prestamos_activos', icon: RefreshCw, label: 'Prestamos activos', badge: 'Activos', color: 'bg-emerald-700', link: '/prestamos' },
+  { key: 'alumnos_registrados', icon: Users, label: 'Alumnos registrados', badge: 'Total', color: 'bg-slate-700', link: '/alumnos' },
   { key: 'preceptores_autorizados', icon: UserCheck, label: 'Preceptores autorizados', badge: 'Activos', color: 'bg-emerald-800' },
-  { key: 'eventos_hoy', icon: ShieldCheck, label: 'Eventos hoy', badge: 'Registrados', color: 'bg-slate-800' },
-  { key: 'alertas_pendientes', icon: Bell, label: 'Alertas pendientes', badge: 'Sin leer', color: 'bg-amber-600' },
+  { key: 'eventos_hoy', icon: ShieldCheck, label: 'Eventos hoy', badge: 'Registrados', color: 'bg-slate-800', link: '/eventos-qr' },
+  { key: 'alertas_pendientes', icon: Bell, label: 'Alertas pendientes', badge: 'Sin leer', color: 'bg-amber-600', link: '/alertas' },
 ]
 
 const tipoIcon = {
@@ -32,6 +34,9 @@ export default function Dashboard() {
   const [prestamos, setPrestamos] = useState([])
   const [camaras, setCamaras] = useState([])
   const [grafico, setGrafico] = useState({ labels: [], data: [] })
+  const [camarasConfig, setCamarasConfig] = useState([])
+  const [camaraOnline, setCamaraOnline] = useState(true)
+  const [conteoIA, setConteoIA] = useState(null)
 
   const fetchData = async () => {
     try {
@@ -50,6 +55,30 @@ export default function Dashboard() {
     } catch { }
   }
 
+  const fetchCamaras = async () => {
+    try {
+      const data = await getCamaras()
+      setCamarasConfig(data)
+      setCamaraOnline(true)
+    } catch {
+      setCamaraOnline(false)
+    }
+  }
+
+  const fetchConteo = async () => {
+    try {
+      const info = await getConteoIA()
+      setConteoIA(info)
+    } catch { }
+  }
+
+  // Primera camara activa con stream_url configurado
+  const camaraActiva = camarasConfig.find(c => c.activa && c.stream_url) || null
+  const _camToken = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null
+  const mjpegUrl = camaraActiva && _camToken
+    ? `http://localhost:8000/api/acceso/camaras/${camaraActiva.id_camara}/mjpeg?token=${_camToken}`
+    : null
+
   useEffect(() => {
     const updateClock = () => {
       const now = new Date()
@@ -60,9 +89,18 @@ export default function Dashboard() {
     const clock = setInterval(updateClock, 30000)
 
     fetchData()
+    fetchCamaras()
+    fetchConteo()
     const dataRefresh = setInterval(fetchData, 30000)
+    const camaraRefresh = setInterval(fetchCamaras, 15000)
+    const conteoRefresh = setInterval(fetchConteo, 4000)
 
-    return () => { clearInterval(clock); clearInterval(dataRefresh) }
+    return () => {
+      clearInterval(clock)
+      clearInterval(dataRefresh)
+      clearInterval(camaraRefresh)
+      clearInterval(conteoRefresh)
+    }
   }, [])
 
   useEffect(() => {
@@ -167,19 +205,42 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 md:gap-6 mb-8">
         {statMeta.map((s) => {
           const Icon = s.icon
-          return (
-            <div key={s.key} className="bg-white p-4 rounded-xl shadow-sm flex items-center space-x-4">
-              <div className={`w-12 h-12 rounded-full ${s.color} flex items-center justify-center text-white shrink-0`}>
+          const content = (
+            <div
+              className={`bg-white p-4 rounded-xl shadow-sm flex items-center space-x-4 h-full border border-slate-100 transition-all ${
+                s.link
+                  ? 'hover:shadow-md hover:border-emerald-300 hover:-translate-y-0.5 cursor-pointer group'
+                  : ''
+              }`}
+            >
+              <div
+                className={`w-12 h-12 rounded-full ${s.color} flex items-center justify-center text-white shrink-0 ${
+                  s.link ? 'group-hover:scale-105 transition-transform' : ''
+                }`}
+              >
                 <Icon className="w-6 h-6" />
               </div>
-              <div className="min-w-0">
-                <p className="text-xs text-slate-500 font-medium">{s.label}</p>
-                <div className="flex items-baseline space-x-2">
-                  <span className="text-2xl font-bold">{stats[s.key] ?? 0}</span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-slate-500 font-medium truncate">{s.label}</p>
+                  {s.link && (
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all shrink-0 ml-1" />
+                  )}
+                </div>
+                <div className="flex items-baseline space-x-2 mt-0.5">
+                  <span className="text-2xl font-bold text-slate-800">{stats[s.key] ?? 0}</span>
                   <span className="text-[10px] text-emerald-600 font-bold">{s.badge}</span>
                 </div>
               </div>
             </div>
+          )
+
+          return s.link ? (
+            <Link key={s.key} to={s.link} className="block no-underline">
+              {content}
+            </Link>
+          ) : (
+            <div key={s.key}>{content}</div>
           )
         })}
       </div>
@@ -215,35 +276,64 @@ export default function Dashboard() {
 
         <div className="col-span-12 lg:col-span-7 bg-white p-6 rounded-2xl shadow-sm">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-slate-900">Aula de almacenamiento</h3>
-            <span className="flex items-center text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded-full uppercase tracking-wider">
-              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1.5 animate-pulse"></span>
-              En vivo
-            </span>
+            <div>
+              <h3 className="font-bold text-slate-900">Aula de almacenamiento</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Armario de notebooks • Bloque 4</p>
+            </div>
+            <div className="flex items-center space-x-2">
+              {conteoIA && (
+                <span className={`inline-flex items-center space-x-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${
+                  conteoIA.faltantes === 0
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                }`}>
+                  <Package className="w-3.5 h-3.5" />
+                  <span>
+                    {conteoIA.conteo} / {conteoIA.cajas_esperadas} Cajas
+                    {conteoIA.faltantes === 0 ? ' (Completo)' : ` (Faltan ${conteoIA.faltantes})`}
+                  </span>
+                </span>
+              )}
+              <span className="flex items-center text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider bg-slate-100 text-slate-600">
+                <span className={`w-1.5 h-1.5 rounded-full mr-1.5 animate-pulse ${camaraOnline ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                {camaraOnline ? 'En vivo' : 'Sin conexión'}
+              </span>
+            </div>
           </div>
           <div className="relative rounded-xl overflow-hidden bg-slate-900 border border-slate-700 flex items-center justify-center aspect-video">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center space-y-4">
-                <div className="grid grid-cols-4 gap-3 px-8">
-                  {[...Array(8)].map((_, i) => (
-                    <div key={i} className="bg-slate-800 rounded-lg p-2 border border-slate-600">
-                      <div className="h-2 w-full bg-emerald-900/50 rounded mb-1"></div>
-                      <div className="h-2 w-3/4 bg-emerald-900/30 rounded mx-auto"></div>
-                      <div className="flex justify-center mt-1">
-                        <span className="w-1 h-1 bg-emerald-500 rounded-full"></span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-[10px] text-slate-400 font-medium">Armarios con notebooks detectadas por IA</p>
+            {mjpegUrl ? (
+              <img
+                key={mjpegUrl}
+                src={mjpegUrl}
+                alt="Stream cámara"
+                className="w-full h-full object-cover"
+                onError={() => setCamaraOnline(false)}
+                onLoad={() => setCamaraOnline(true)}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center text-slate-500 space-y-2">
+                <Video className="w-12 h-12" />
+                <p className="text-sm">Sin transmisión de cámara</p>
+                <p className="text-xs">Registrá una cámara con stream RTSP en el sistema</p>
               </div>
+            )}
+            <div className="absolute top-2 left-2 flex items-center space-x-1.5">
+              <div className="bg-emerald-600/90 text-white text-[9px] font-bold px-2 py-0.5 rounded shadow-sm flex items-center">
+                <span className="w-1.5 h-1.5 bg-white rounded-full mr-1.5 animate-pulse"></span>
+                IA SMARTTRACK
+              </div>
+              {conteoIA?.procesando && (
+                <div className="bg-amber-500/90 text-white text-[9px] font-bold px-2 py-0.5 rounded shadow-sm animate-pulse">
+                  ANALIZANDO MOVIMIENTO
+                </div>
+              )}
             </div>
-            <div className="absolute top-2 left-2 bg-emerald-600/80 text-white text-[8px] font-bold px-1.5 py-0.5 rounded flex items-center">
-              <span className="w-1 h-1 bg-white rounded-full mr-1 animate-pulse"></span>
-              IA ACTIVA
+            <div className="absolute bottom-2 left-2 text-[10px] text-slate-300 font-medium bg-black/60 px-2 py-0.5 rounded backdrop-blur-xs">
+              {camaraActiva ? camaraActiva.nombre : 'Sin cámara'}
             </div>
-            <div className="absolute bottom-2 left-2 text-[8px] text-slate-400 font-medium">Camara IP - Aula TST</div>
-            <div className="absolute bottom-2 right-2 text-[8px] text-slate-400 font-mono">{new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</div>
+            <div className="absolute bottom-2 right-2 text-[10px] text-slate-300 font-mono bg-black/60 px-2 py-0.5 rounded backdrop-blur-xs">
+              {new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </div>
           </div>
         </div>
       </div>

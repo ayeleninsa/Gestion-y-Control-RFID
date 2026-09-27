@@ -13,6 +13,7 @@ class Camara(Base):
     nombre: Mapped[str] = mapped_column(String(100), nullable=False)
     ubicacion: Mapped[str] = mapped_column(String(200), nullable=False)
     ip: Mapped[str] = mapped_column(String(45), nullable=False)
+    stream_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     activa: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

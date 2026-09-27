@@ -14,6 +14,7 @@ from app.api.qr_events import router as qr_events_router
 from app.api.carreras import router as carreras_router
 from app.api.prestamos import router as prestamos_router
 from app.core.config import settings
+from app.services.detector_service import detector_service
 from app.services.seeder import seed_users, seed_personas, seed_camaras
 from app.services.simulador import simulador
 
@@ -21,13 +22,12 @@ from app.services.simulador import simulador
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await seed_users()
-    # seed de personas/cámaras/eventos desactivado por pedido del usuario
-    # (evita que se recreen al reiniciar el backend)
-    # persona_ids = await seed_personas()
-    # await seed_camaras(persona_ids)
+    # Iniciar detector de cajas IA en segundo plano
+    detector_service.iniciar()
     if settings.simulador_enabled:
         simulador.iniciar()
     yield
+    detector_service.detener()
     if settings.simulador_enabled:
         simulador.detener()
 

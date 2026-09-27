@@ -8,6 +8,7 @@ class CamaraRead(BaseModel):
     nombre: str
     ubicacion: str
     ip: str
+    stream_url: str | None
     activa: bool
     created_at: datetime
 
@@ -18,12 +19,14 @@ class CamaraCreate(BaseModel):
     nombre: str
     ubicacion: str
     ip: str
+    stream_url: str | None = None
 
 
 class CamaraUpdate(BaseModel):
     nombre: str | None = None
     ubicacion: str | None = None
     ip: str | None = None
+    stream_url: str | None = None
     activa: bool | None = None
 
 

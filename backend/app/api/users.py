@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_role
+from app.api.dependencies import require_role, require_roles
 from app.core.database import get_db
 from app.core.security import hash_password
 from app.models.user import User
@@ -14,10 +14,15 @@ router = APIRouter(prefix="/api/users", tags=["Users"])
 @router.get("/", response_model=list[UserRead])
 async def list_users(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_roles("admin", "preceptor")),
 ):
-    result = await db.execute(select(User).order_by(User.id))
+    result = await db.execute(
+        select(User)
+        .where(User.rol.in_(["admin", "preceptor"]))
+        .order_by(User.id)
+    )
     return result.scalars().all()
+
 
 
 @router.get("/{user_id}", response_model=UserRead)
@@ -63,6 +68,11 @@ async def delete_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
+    if current_user.id == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No puedes eliminar tu propia cuenta de usuario",
+        )
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:

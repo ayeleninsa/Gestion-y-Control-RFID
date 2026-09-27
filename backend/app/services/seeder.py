@@ -32,7 +32,8 @@ SEED_PERSONAS = [
 ]
 
 SEED_CAMARAS = [
-    {"nombre": "Camara Inventario", "ubicacion": "Puerta de ingreso al inventario", "ip": "192.168.1.100"},
+    {"nombre": "Camara Inventario", "ubicacion": "Puerta de ingreso al inventario", "ip": "192.168.1.100", "stream_url": "http://192.168.1.100:8080/video"},
+    {"nombre": "Camara Hilook Aula TST", "ubicacion": "Aula principal TST (Hilook)", "ip": "192.168.1.104", "stream_url": "rtsp://admin:12345@192.168.1.104:554/Streaming/Channels/101"},
 ]
 
 SEED_EVENTOS = [

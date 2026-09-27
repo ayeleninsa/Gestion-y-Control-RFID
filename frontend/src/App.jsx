@@ -78,7 +78,7 @@ export default function App() {
             <Route
               path="usuarios"
               element={
-                <ProtectedRoute adminOnly>
+                <ProtectedRoute allowedRoles={['admin', 'preceptor']}>
                   <Users />
                 </ProtectedRoute>
               }

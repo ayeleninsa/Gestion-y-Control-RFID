@@ -20,7 +20,7 @@ import {
 
 const navItems = [
   { label: 'Dashboard', path: '/', icon: LayoutDashboard, roles: ['admin', 'preceptor'] },
-  { label: 'Usuarios', path: '/usuarios', icon: Users, roles: ['admin'] },
+  { label: 'Usuarios', path: '/usuarios', icon: Users, roles: ['admin', 'preceptor'] },
   { label: 'Carreras', path: '/carreras', icon: ClipboardList, roles: ['admin', 'preceptor'] },
   { label: 'Alumnos', path: '/alumnos', icon: UserCheck, roles: ['admin', 'preceptor'] },
   { label: 'Computadoras', path: '/computadoras', icon: Laptop, roles: ['admin', 'preceptor'] },

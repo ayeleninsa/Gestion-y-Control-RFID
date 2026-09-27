@@ -29,6 +29,7 @@ export default function EscanerQR() {
   const scanningRef = useRef(false)
   const procesandoRef = useRef(false)
   const [cameraOn, setCameraOn] = useState(false)
+  const fileInputRef = useRef(null)
 
   const stopScanner = useCallback(async () => {
     scanningRef.current = false
@@ -37,13 +38,133 @@ export default function EscanerQR() {
         await scannerRef.current.stop()
       } catch { /* ignore */ }
       try {
-        scannerRef.current.clear()
+        await scannerRef.current.clear()
       } catch { /* ignore */ }
       scannerRef.current = null
     }
   }, [])
 
-  const startScanner = useCallback(async (onDecode) => {
+  const doValidate = useCallback(async (fisico, dinamico) => {
+    if (!dinamico) {
+      setResultError('Falta el QR dinámico del preceptor. Por favor, escanea primero el QR del preceptor.')
+      setPaso(1)
+      setValidando(false)
+      return
+    }
+    if (!fisico) {
+      setResultError('No se pudo identificar el código de la computadora. Intenta escanear nuevamente.')
+      setValidando(false)
+      return
+    }
+
+    setValidando(true)
+    setResultError('')
+    setResultado(null)
+    try {
+      const res = await validateDualQR(fisico, dinamico)
+      procesandoRef.current = false
+      setResultado(res)
+    } catch (err) {
+      const detail = err.response?.data?.detail || 'Error al validar los QR. Intenta nuevamente.'
+      const esErrorDinamico = /din[ám]ico|token|expir|caduc/i.test(detail)
+      procesandoRef.current = false
+      setResultError(detail)
+      setQrFisico('')
+      if (esErrorDinamico) {
+        setQrDinamico('')
+        setPaso(1)
+      } else {
+        setPaso(2)
+      }
+      setCameraOn(false)
+    } finally {
+      setValidando(false)
+    }
+  }, [])
+
+  const onDecode = useCallback(async (text) => {
+    const valor = text.trim()
+    if (!valor) return
+
+    const esJwt = valor.startsWith('eyJ') && valor.includes('.')
+
+    await stopScanner()
+    setCameraOn(false)
+    setValidando(true)
+    setResultError('')
+    setResultado(null)
+
+    try {
+      if (esJwt) {
+        // Es el QR dinámico del preceptor
+        if (qrDinamico) {
+          procesandoRef.current = false
+          setValidando(false)
+          setResultError('Ya escaneaste el QR del preceptor. Ahora escaneá el QR pegado en tu computadora.')
+          return
+        }
+
+        // Reclamar el QR dinámico
+        await reclamarQrDinamico(valor)
+        setQrDinamico(valor)
+        procesandoRef.current = false
+
+        if (qrFisico) {
+          // Ya tenemos ambos QR: validar operación
+          await doValidate(qrFisico, valor)
+        } else {
+          setPaso(2)
+          setValidando(false)
+        }
+      } else {
+        // Es el QR físico de la computadora
+        const tag = extraerTagRfid(valor)
+        if (qrFisico) {
+          procesandoRef.current = false
+          setValidando(false)
+          setResultError('Ya escaneaste la computadora. Ahora escaneá el QR dinámico de la pantalla del preceptor.')
+          return
+        }
+
+        setQrFisico(tag)
+        procesandoRef.current = false
+
+        if (qrDinamico) {
+          // Ya tenemos ambos QR: validar operación
+          await doValidate(tag, qrDinamico)
+        } else {
+          setPaso(2)
+          setValidando(false)
+        }
+      }
+    } catch (err) {
+      procesandoRef.current = false
+      setResultError(err.response?.data?.detail || 'El QR dinámico no es válido o ya caducó. Pedí al preceptor que genere uno nuevo.')
+      setValidando(false)
+    }
+  }, [qrDinamico, qrFisico, stopScanner, doValidate])
+
+  const handleScanFile = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setCamError('')
+    setValidando(true)
+    try {
+      const html5QrCode = new Html5Qrcode('qr-temp-reader')
+      const decodedText = await html5QrCode.scanFile(file, true)
+      try { await html5QrCode.clear() } catch {}
+      await onDecode(decodedText)
+    } catch (err) {
+      if (!resultado && !resultError) {
+        setValidando(false)
+        setCamError('No se pudo leer el código QR de la foto. Intenta sacarla más cerca y bien enfocada.')
+      }
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const startScanner = useCallback(async (onDecodeCallback) => {
     setCamError('')
     try {
       await stopScanner()
@@ -56,64 +177,14 @@ export default function EscanerQR() {
         (decodedText) => {
           if (!scanningRef.current || procesandoRef.current) return
           procesandoRef.current = true
-          onDecode(decodedText)
+          onDecodeCallback(decodedText)
         },
         () => { /* error frame - ignore */ }
       )
-    } catch (err) {
-      setCamError('No se pudo acceder a la camara. Verifica los permisos del navegador e intenta nuevamente.')
+    } catch {
+      setCamError('No se pudo acceder a la cámara en vivo por restricciones del navegador. Puedes usar el botón "Tomar foto al QR" abajo para escanear con la cámara de tu teléfono.')
     }
   }, [stopScanner])
-
-  const doValidate = useCallback(async (fisico, dinamico) => {
-    setValidando(true)
-    setResultError('')
-    setResultado(null)
-    try {
-      const res = await validateDualQR(fisico, dinamico)
-      procesandoRef.current = false
-      setResultado(res)
-    } catch (err) {
-      const detail = err.response?.data?.detail || 'Error al validar los QR. Intenta nuevamente.'
-      const esErrorDinamico = /din[ám]ico|token|expir/i.test(detail)
-      procesandoRef.current = false
-      setResultError(detail)
-      setQrFisico('')
-      setPaso(esErrorDinamico ? 1 : 2)
-      setCameraOn(false)
-    } finally {
-      setValidando(false)
-    }
-  }, [])
-
-  const onDecode = useCallback((text) => {
-    const valor = text.trim()
-    if (paso === 1) {
-      stopScanner()
-      setValidando(true)
-      setResultError('')
-      setResultado(null)
-      reclamarQrDinamico(valor)
-        .then(() => {
-          procesandoRef.current = false
-          setQrDinamico(valor)
-          setPaso(2)
-          setCameraOn(false)
-        })
-        .catch((err) => {
-          procesandoRef.current = false
-          setResultError(err.response?.data?.detail || 'El QR dinámico no es válido. Pedí al preceptor que genere uno nuevo.')
-          setCameraOn(false)
-        })
-        .finally(() => setValidando(false))
-    } else {
-      const tag = extraerTagRfid(valor)
-      stopScanner()
-      setQrFisico(tag)
-      setCameraOn(false)
-      doValidate(tag, qrDinamico)
-    }
-  }, [paso, qrDinamico, stopScanner, doValidate])
 
   useEffect(() => {
     if (!cameraOn) return
@@ -205,42 +276,86 @@ export default function EscanerQR() {
             <span className="font-semibold">Camara</span>
           </div>
 
+          {/* Hidden input for native camera capture */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleScanFile}
+          />
+          <div id="qr-temp-reader" className="hidden" />
+
           {mostrarPantallaBienvenida && (
-            <div className="bg-slate-50 rounded-lg border border-dashed border-slate-300 flex flex-col items-center justify-center py-12 px-4 text-center">
+            <div className="bg-slate-50 rounded-lg border border-dashed border-slate-300 flex flex-col items-center justify-center py-10 px-4 text-center">
               <ScanLine className="w-12 h-12 text-slate-300 mb-3" />
-              <p className="text-sm text-slate-600 mb-4">
-                {paso === 1
-                  ? 'Aprieta el boton para abrir la camara y escanear el QR dinamico del preceptor.'
-                  : 'QR del preceptor leido. Ahora escanea el QR pegado en tu computadora.'}
+              <p className="text-sm text-slate-600 mb-6 max-w-sm">
+                {!qrDinamico && !qrFisico && 'Podés comenzar escaneando el QR dinámico de la pantalla del preceptor o el QR pegado en tu computadora.'}
+                {qrDinamico && !qrFisico && '¡QR del preceptor leído correctamente ✓! Ahora escaneá el QR pegado en tu computadora.'}
+                {!qrDinamico && qrFisico && '¡Computadora leída correctamente ✓! Ahora escaneá el QR dinámico que muestra el preceptor.'}
               </p>
-              <button
-                type="button"
-                onClick={() => setCameraOn(true)}
-                className="inline-flex items-center space-x-2 px-6 py-3 bg-[#006143] text-white font-semibold rounded-xl hover:bg-[#004d35] transition-colors"
-              >
-                {paso === 1 ? <QrCode className="w-5 h-5" /> : <Laptop className="w-5 h-5" />}
-                <span>Abrir camara</span>
-              </button>
+              
+              <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm justify-center">
+                <button
+                  type="button"
+                  onClick={() => setCameraOn(true)}
+                  className="flex-1 inline-flex items-center justify-center space-x-2 px-5 py-3 bg-[#006143] text-white font-semibold rounded-xl hover:bg-[#004d35] transition-colors shadow-sm"
+                >
+                  <Camera className="w-5 h-5" />
+                  <span>Cámara en vivo</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1 inline-flex items-center justify-center space-x-2 px-5 py-3 bg-[#24c48a] text-white font-semibold rounded-xl hover:bg-[#1da875] transition-colors shadow-sm"
+                >
+                  <Camera className="w-5 h-5" />
+                  <span>Tomar foto al QR</span>
+                </button>
+              </div>
             </div>
           )}
 
           {mostrarCamara && (
-            <div className="bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center">
-              <div id={READER_ID} className="w-full" />
+            <div className="bg-slate-900 rounded-lg overflow-hidden flex flex-col items-center justify-center p-2">
+              <div id={READER_ID} className="w-full max-w-md" />
+              <button
+                type="button"
+                onClick={() => setCameraOn(false)}
+                className="mt-3 text-sm text-white/70 hover:text-white underline py-1"
+              >
+                Cerrar cámara en vivo
+              </button>
             </div>
           )}
 
           {camError && (
-            <div className="mt-4 flex items-start space-x-2 p-3 bg-amber-50 text-amber-800 rounded-lg text-sm">
-              <AlertTriangle className="w-5 h-5 shrink-0" />
-              <div>
-                <p>{camError}</p>
+            <div className="mt-4 p-4 bg-amber-50 text-amber-900 rounded-xl border border-amber-200 text-sm">
+              <div className="flex items-start space-x-3 mb-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <p className="font-medium leading-relaxed">{camError}</p>
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-amber-200/60">
                 <button
                   type="button"
-                  onClick={() => startScanner(onDecode)}
-                  className="mt-2 text-[#006143] font-medium hover:underline"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-4 py-2 bg-[#006143] text-white font-semibold rounded-lg hover:bg-[#004d35] transition-colors text-xs inline-flex items-center space-x-1.5"
                 >
-                  Reintentar camara
+                  <Camera className="w-4 h-4" />
+                  <span>Tomar foto al QR (Cámara nativa)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCamError('')
+                    setCameraOn(true)
+                  }}
+                  className="px-3 py-2 border border-amber-300 text-amber-800 rounded-lg hover:bg-amber-100 transition-colors text-xs"
+                >
+                  Reintentar en vivo
                 </button>
               </div>
             </div>
@@ -256,50 +371,110 @@ export default function EscanerQR() {
       )}
 
       {!validando && resultado && (
-        <div className="mt-6 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="mt-6 bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
           <div className="p-8">
             <div className="flex flex-col items-center text-center">
-              <div className="w-16 h-16 rounded-full bg-[#24c48a]/15 flex items-center justify-center mb-4">
-                <CheckCircle2 className="w-9 h-9 text-[#006143]" />
+              {resultado.evento_tipo === 'RETIRO_PC' ? (
+                <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mb-4 text-[#006143]">
+                  <Laptop className="w-9 h-9" />
+                </div>
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mb-4 text-blue-700">
+                  <CheckCircle2 className="w-9 h-9" />
+                </div>
+              )}
+
+              {/* Badge indicando tipo de escaneo */}
+              <div className="mb-2">
+                {resultado.evento_tipo === 'RETIRO_PC' ? (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-[#006143] border border-emerald-300">
+                    🟢 1er Escaneo: RETIRO DE COMPUTADORA
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300">
+                    🔵 2do Escaneo: DEVOLUCIÓN DE COMPUTADORA
+                  </span>
+                )}
               </div>
-              <h2 className="text-2xl font-bold text-slate-800">Registro exitoso</h2>
-              <p className="text-slate-500 mt-1">{resultado.message}</p>
-              <div className="mt-6 w-full max-w-sm bg-slate-50 rounded-xl p-4 text-left space-y-2">
+
+              <h2 className="text-2xl font-bold text-slate-800">
+                {resultado.evento_tipo === 'RETIRO_PC' ? 'Retiro Registrado con Éxito' : 'Devolución Registrada con Éxito'}
+              </h2>
+              <p className="text-slate-600 mt-1 max-w-md text-sm">{resultado.message}</p>
+
+              {/* Card de Detalles */}
+              <div className="mt-6 w-full max-w-md bg-slate-50 rounded-xl p-5 text-left border border-slate-200 space-y-2.5 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Alumno</span>
-                  <span className="font-medium text-slate-800">{resultado.alumno_nombre}</span>
+                  <span className="text-slate-500">Alumno:</span>
+                  <span className="font-semibold text-slate-800">{resultado.alumno_nombre}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Computadora</span>
-                  <span className="font-medium text-slate-800">{resultado.computadora_tag} {resultado.computadora_modelo ? '-' : ''} {resultado.computadora_modelo}</span>
+                  <span className="text-slate-500">Computadora:</span>
+                  <span className="font-semibold text-slate-800">
+                    {resultado.computadora_modelo || 'Notebook'} ({resultado.computadora_tag})
+                  </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Evento</span>
-                  <span className="font-medium text-[#006143]">{resultado.evento_tipo.replace('_', ' ')}</span>
+                  <span className="text-slate-500">Operación:</span>
+                  <span className={`font-bold ${resultado.evento_tipo === 'RETIRO_PC' ? 'text-[#006143]' : 'text-blue-700'}`}>
+                    {resultado.evento_tipo === 'RETIRO_PC' ? 'RETIRO (Inicio jornada)' : 'DEVOLUCIÓN (Fin jornada)'}
+                  </span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500">QR escaneados</span>
+                {(resultado.hora || resultado.timestamp) && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Hora registrada:</span>
+                    <span className="font-mono font-medium text-slate-700">
+                      {resultado.timestamp
+                        ? new Date(resultado.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                        : resultado.hora} hs
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+                  <span className="text-slate-500">Verificación QR:</span>
                   <span className="flex space-x-1.5">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#24c48a]/10 text-[#006143]">Fisico ✓</span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#24c48a]/10 text-[#006143]">Dinamico ✓</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-[#006143]">
+                      QR Preceptor ✓
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-[#006143]">
+                      QR Notebook ✓
+                    </span>
                   </span>
                 </div>
               </div>
-              <div className="flex space-x-3 mt-8">
+
+              {/* Mensaje de orientación según el tipo */}
+              <div className={`mt-5 p-3.5 rounded-xl text-xs max-w-md text-left ${
+                resultado.evento_tipo === 'RETIRO_PC' 
+                  ? 'bg-amber-50 text-amber-900 border border-amber-200' 
+                  : 'bg-emerald-50 text-emerald-900 border border-emerald-200'
+              }`}>
+                {resultado.evento_tipo === 'RETIRO_PC' ? (
+                  <p>
+                    💡 <strong>Recordatorio:</strong> Al finalizar tus clases o la jornada, deberás volver a escanear el QR del preceptor y el de tu computadora para registrar la <strong>DEVOLUCIÓN</strong>.
+                  </p>
+                ) : (
+                  <p>
+                    🎉 <strong>¡Completado!</strong> Ya has devuelto tu equipo. Ambos escaneos del día quedaron registrados en el sistema.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 mt-7 w-full max-w-md justify-center">
                 <button
                   type="button"
                   onClick={reescanear}
-                  className="flex items-center space-x-2 px-5 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50"
+                  className="flex items-center justify-center space-x-2 px-5 py-2.5 border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors font-medium text-sm"
                 >
                   <RotateCcw className="w-4 h-4" />
-                  <span>Volver a escanear</span>
+                  <span>Escanear otra vez</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => navigate('/alumno')}
-                  className="px-5 py-2 bg-[#006143] text-white rounded-lg hover:bg-[#004d35]"
+                  className="px-6 py-2.5 bg-[#006143] text-white rounded-xl hover:bg-[#004d35] transition-colors font-semibold text-sm shadow-sm"
                 >
-                  Ir al inicio
+                  Volver al inicio
                 </button>
               </div>
             </div>
